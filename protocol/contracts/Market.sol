@@ -137,6 +137,10 @@ contract Market is Initializable, AccessControlUpgradeable, PausableUpgradeable,
   /// @param receiver address that will receive the borrowed assets.
   /// @param borrower address that will repay the borrowed assets.
   /// @return borrowShares shares corresponding to the borrowed assets.
+
+
+  // @q how is the collateral deposited for this borrow?
+  // Can I borrow without collateral? Missing access control?
   function borrow(
     uint256 assets,
     address receiver,
@@ -547,7 +551,7 @@ contract Market is Initializable, AccessControlUpgradeable, PausableUpgradeable,
     uint256 maxAssets,
     Market seizeMarket
   ) external whenNotPaused returns (uint256 repaidAssets) {
-    if (msg.sender == borrower) revert SelfLiquidation();
+    if (msg.sender == borrower) revert SelfLiquidation(); // @audit bypass with sybil strategy
 
     maxAssets = auditor.checkLiquidation(this, seizeMarket, borrower, maxAssets);
     if (maxAssets == 0) revert ZeroRepay();
@@ -598,6 +602,9 @@ contract Market is Initializable, AccessControlUpgradeable, PausableUpgradeable,
     (uint256 lendersAssets, uint256 seizeAssets) = auditor.calculateSeize(this, seizeMarket, borrower, repaidAssets);
     earningsAccumulator += lendersAssets;
 
+    // @audit reentrancy?
+    // Because the seize transfer comes before the liquidate transfer
+    // I can liquidate more than one liquidatable positions, but pay for only one.
     if (address(seizeMarket) == address(this)) {
       internalSeize(this, msg.sender, borrower, seizeAssets);
     } else {
